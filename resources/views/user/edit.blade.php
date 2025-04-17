@@ -5,30 +5,36 @@
     <!-- Page Heading -->
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Edit User</h1>
-        <a href="#" class="d-none d-sm-inline-block btn btn-secondary shadow-sm">
+        <a href="{{ route('user.index') }}" class="d-none d-sm-inline-block btn btn-secondary shadow-sm">
             <i class="fas fa-arrow-left fa-sm text-white-50"></i> Back to Users
         </a>
     </div>
 
     <div class="card shadow mb-4">
         <div class="card-body">
-            <form method="POST" action="" id="userForm">
+            <form method="POST" action="{{ route('user.update', $user->id) }}" id="userForm">
+                @csrf
+                @method('PUT')
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="name">Name</label>
-                            <input type="text" class="form-control" 
-                                id="name" name="name" value="" 
+                            <input type="text" class="form-control @error('name') is-invalid @enderror" 
+                                id="name" name="name" value="{{ old('name', $user->name) }}" 
                                 required minlength="3" maxlength="255">
-                                <div class="invalid-feedback"></div>
+                            @error('name')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="email">Email</label>
-                            <input type="email" class="form-control " 
-                                id="email" name="email" value="" required>
-                                <div class="invalid-feedback"></div>
+                            <input type="email" class="form-control @error('email') is-invalid @enderror" 
+                                id="email" name="email" value="{{ old('email', $user->email) }}" required>
+                            @error('email')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                 </div>
@@ -37,11 +43,13 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="password">Password</label>
-                            <input type="password" class="form-control" 
+                            <input type="password" class="form-control @error('password') is-invalid @enderror" 
                                 id="password" name="password" 
-                                placeholder="Leave blank to keep current password"
-                                minlength="8">
-                                <div class="invalid-feedback"></div>
+                                placeholder=" password"
+                                minlength="3">
+                            @error('password')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
                     </div>
                         <div class="col-md-6">
@@ -50,10 +58,12 @@
                                 <select class="form-control @error('role') is-invalid @enderror" 
                                     id="role" name="role" required>
                                     <option value="">Select Role</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="staff">Staff</option>
+                                    <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Admin</option>
+                                    <option value="staff" {{ old('role', $user->role) == 'staff' ? 'selected' : '' }}>Staff</option>
                                 </select>
-                                    <div class="invalid-feedback"></div>
+                                @error('role')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
                         </div>
                     </div>
                 </div>

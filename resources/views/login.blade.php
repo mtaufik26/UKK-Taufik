@@ -8,7 +8,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Login</title>
+    <title>{{ config('app.name') }} - Login</title>
 
     <!-- Custom fonts for this template-->
     <link href="{{ asset('template/vendor/fontawesome-free/css/all.min.css') }}" rel="stylesheet" type="text/css">
@@ -33,32 +33,41 @@
                                     <div class="text-center">
                                         <h1 class="h4 text-gray-900 mb-4">Welcome Back!</h1>
                                     </div>
+                                    
+                                    @if(session('status'))
                                         <div class="alert alert-success">
+                                            {{ session('status') }}
                                         </div>
                                     @endif
+                                    
+                                    @if ($errors->any())
                                         <div class="alert alert-danger">
                                             <ul class="mb-0">
+                                                @foreach ($errors->all() as $error)
+                                                    <li>{{ $error }}</li>
                                                 @endforeach
                                             </ul>
                                         </div>
                                     @endif
                                     
-                                    <form class="user" method="POST" action="">
+                                    <form class="user" method="POST" action="{{ route('login') }}">
                                         @csrf
                                         <div class="form-group">
-                                            <input type="email" class="form-control form-control-user " 
+                                            <input type="email" class="form-control form-control-user @error('email') is-invalid @enderror" 
                                                    name="email" id="email" placeholder="Enter Email Address..." 
-                                                   value="" required autofocus>
+                                                   value="{{ old('email') }}" required autofocus>
+                                            @error('email')
                                                 <span class="invalid-feedback" role="alert">
-                                                    <strong></strong>
+                                                    <strong>{{ $message }}</strong>
                                                 </span>
                                             @enderror
                                         </div>
                                         <div class="form-group">
-                                            <input type="password" class="form-control form-control-user " 
+                                            <input type="password" class="form-control form-control-user @error('password') is-invalid @enderror" 
                                                    name="password" id="password" placeholder="Password" required>
+                                            @error('password')
                                                 <span class="invalid-feedback" role="alert">
-                                                    <strong></strong>
+                                                    <strong>{{ $message }}</strong>
                                                 </span>
                                             @enderror
                                         </div>
