@@ -55,7 +55,7 @@
             <li class="nav-item {{ Request::is('pembelian*') ? 'active' : '' }}">
                 <a class="nav-link" href="{{ route('pembelian.index') }}">
                     <i class="fas fa-fw fa-shopping-cart"></i>
-                    <span>Pembelian</span>
+                    <span>Penjualan</span>
                 </a>
             </li>
             @if(Auth::user()->role == 'admin')
@@ -118,7 +118,7 @@
                                 aria-labelledby="userDropdown">
                                 <div class="px-4 py-2 text-sm text-gray-700">
                                     <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
-                                    {{ ucfirst(Auth::user()->role) }}
+                                    {{ ucfirst(Auth::user()->name) }}
                                 </div>
                                 <div class="dropdown-divider"></div>
                                 <form action="{{ route('logout') }}" method="POST" class="dropdown-item p-0">
@@ -135,7 +135,7 @@
 
                 <div class="container-fluid">
                     @if(session('success'))
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <div class="alert alert-success alert-dismissible fade show" role="alert" id="successAlert">
                         <div class="d-flex align-items-center">
                             <i class="fas fa-check-circle mr-2"></i>
                             <strong>{{ session('success') }}</strong>
@@ -144,7 +144,27 @@
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
-                    @endif
+                @endif
+                
+                <script>
+                    $(document).ready(function() {
+                        // Automatically hide the alert after 2 seconds
+                        setTimeout(function() {
+                            $('#successAlert').fadeOut(1000, function() {
+                                $(this).remove();
+                            });
+                        }, 2000); // 2000ms = 2 seconds
+                        
+                        // Allow manual dismissal of the alert by clicking the close button
+                        $('.close').on('click', function() {
+                            $('#successAlert').fadeOut(1000, function() {
+                                $(this).remove();
+                            });
+                        });
+                    });
+                </script>
+                
+                
                     @yield('content')
                 </div>
             </div>
@@ -153,7 +173,7 @@
 
     <script>
         // Pastikan DOM sepenuhnya dimuat sebelum inisialisasi chart
-        document.addEventListener('DOMContentLoaded', function() {
+        documAnt.addEventListener('DOMContentLoaded', function() {
             // Inisialisasi chart area jika elemen ada
             if(document.getElementById('myAreaChart')) {
                 // Kode chart area di sini

@@ -13,8 +13,7 @@ return new class extends Migration
             $table->string('invoice_number');
             $table->string('customer_name');
             $table->decimal('grand_total', 10, 2);
-            $table->date('tanggal');
-            $table->decimal('kembalian', 10, 2)->default(0);
+            $table->datetimes('tanggal');
             $table->string('dibuat_oleh');
             $table->timestamps();
         });
@@ -38,10 +37,6 @@ return new class extends Migration
     {
         Schema::dropIfExists('pembelian_details');
         Schema::dropIfExists('pembelians');
-        Schema::table('pembelians', function (Blueprint $table) {
-            $table->dropColumn('kembalian');
-        });
     }
-
 
 };

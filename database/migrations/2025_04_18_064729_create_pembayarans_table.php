@@ -11,22 +11,24 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('detail_pembelians', function (Blueprint $table) {
+        Schema::create('pembayarans', function (Blueprint $table) {
             $table->id();
             $table->foreignId('pembelian_id')->constrained('pembelians')->cascadeOnDelete();
-            $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
-            $table->integer('quantity');
-            $table->decimal('harga', 12, 2);
-            $table->decimal('subtotal', 12, 2);
+            $table->string('metode_pembayaran', 50)->default('Tunai');
+            $table->decimal('jumlah_bayar', 12, 2);
+            $table->decimal('kembalian', 12, 2)->default(0);
             $table->timestamps();
         });
     }
+    
+
+
     /**
      * Reverse the migrations.
      */
     public function down()
     {
-        Schema::dropIfExists('detail_pembelians');
+        Schema::dropIfExists('pembayarans');
     }
-        
+    
 };

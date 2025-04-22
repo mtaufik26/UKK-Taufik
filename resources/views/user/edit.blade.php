@@ -59,7 +59,7 @@
                                     id="role" name="role" required>
                                     <option value="">Select Role</option>
                                     <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Admin</option>
-                                    <option value="staff" {{ old('role', $user->role) == 'staff' ? 'selected' : '' }}>Staff</option>
+                                    <option value="stuf" {{ old('role', $user->role) == 'stuf' ? 'selected' : '' }}>Stuf</option>
                                 </select>
                                 @error('role')
                                     <div class="invalid-feedback">{{ $message }}</div>

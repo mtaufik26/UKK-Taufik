@@ -2,64 +2,33 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Member;
 use Illuminate\Http\Request;
 
 class MemberController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function verify(Request $request)
     {
-        //
+        // Store purchase data in session
+        session(['purchase_data' => $request->all()]);
+        
+        return response()->json([
+            'success' => true,
+            'redirect' => route('member-info.show')
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function show()
     {
-        //
-    }
+        $purchaseData = session('purchase_data');
+        
+        if (!$purchaseData) {
+            return redirect()->route('pembelian.create');
+        }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Member $member)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Member $member)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Member $member)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Member $member)
-    {
-        //
+        return view('member-info.show', [
+            'selectedProducts' => $purchaseData['items'] ?? [],
+            'total' => $purchaseData['total_amount'] ?? 0,
+            'points' => 0 // You can implement your point system logic here
+        ]);
     }
 }

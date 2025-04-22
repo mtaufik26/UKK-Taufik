@@ -1,166 +1,104 @@
 @extends('layouts.app')
-@section('title', 'Penjualan')
+
+@section('title', 'Tambah Penjualan')
 
 @section('content')
-<div class="container-fluid">
-    <h1 class="h3 mb-4 text-gray-800">Penjualan</h1>
+    <div class="container mt-4 mb-5 pb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="h2 font-weight-bold text-dark">Tambah Penjualan Baru</h2>
+            <a href="{{ route('pembelian.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>Kembali
+            </a>
+        </div>
 
-    <div class="row">
-        @foreach ($products as $product)
-            <div class="col-md-3 mb-4">
-                <div class="card shadow h-100">
-                    <div class="card-body text-center">
-                        @if($product->img)
-                        <img src="{{ asset('storage/'.$product->img) }}" 
-                             alt="{{ $product->nama_produk }}" 
-                             class="img-fluid mb-3 rounded-lg"
-                             style="height: 150px; width: 150px; object-fit: cover;">
-                    @else
-                        <img src="{{ asset('img/no-image.png') }}"
-                             alt="No Image"
-                             class="img-fluid mb-3 rounded-lg"
-                             style="height: 150px; width: 150px; object-fit: cover;">
-                    @endif
-
-                        <h4 class="card-title">{{ $product->nama_produk }}</h4>
-                        <p class="text-muted">Stok {{ $product->stok }}</p>
-                        <h5 class="text-primary font-weight-bold">
-                            Rp. {{ number_format($product->harga, 0, ',', '.') }}
-                        </h5>
-
-                        <div class="d-flex justify-content-center align-items-center my-3">
-                            <div class="input-group" style="width: 200px;">
-                                <div class="input-group-prepend">
-                                    <button type="button" class="btn btn-outline-primary btn-minus" 
-                                        data-id="{{ $product->id }}"
-                                        data-price="{{ $product->harga }}"
-                                        {{ $product->stok == 0 ? 'disabled' : '' }}>
-                                        <i class="fas fa-minus"></i>
-                                    </button>
-                                </div>
-
-                                <input type="number" id="qty-{{ $product->id }}" 
-                                    class="form-control text-center" 
-                                    value="0" 
-                                    min="0" 
-                                    max="{{ $product->stok }}"
-                                    {{ $product->stok == 0 ? 'disabled' : '' }}
-                                    readonly>
-
-                                <div class="input-group-append">
-                                    <button type="button" class="btn btn-outline-primary btn-plus" 
-                                        data-id="{{ $product->id }}" 
-                                        data-price="{{ $product->harga }}"
-                                        data-stock="{{ $product->stok }}"
-                                        {{ $product->stok == 0 ? 'disabled' : '' }}>
-                                        <i class="fas fa-plus"></i>
-                                    </button>
+        <div class="">
+            <form action="{{ route('pembelian.confirm') }}" method="POST" class="card-body" id="purchaseForm">
+                @csrf
+                <div class="row">
+                    @foreach($products as $product)
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 d-flex align-items-center ">
+                                @if($product->img)
+                                    <img src="{{ asset('storage/'.$product->img) }}" 
+                                        alt="{{ $product->nama_produk }}" 
+                                        class="img-fluid mb-3 rounded-lg mt-3"
+                                        style="height: 150px; width: 150px; object-fit: cover;">
+                                @else
+                                    <img src="{{ asset('img/no-image.png') }}"
+                                        alt="No Image"
+                                        class="img-fluid mb-3 rounded-lg mt-3"
+                                        style="height: 150px; width: 150px; object-fit: cover;">
+                                @endif
+                                <div class="card-body text-center">
+                                    <h5 class="card-title font-weight-bold">{{ $product->nama_produk }}</h5>
+                                    <p class="text-muted">Stok: {{ $product->stok }}</p>
+                                    <p class="font-weight-bold text-dark mb-3" data-price="{{ $product->harga }}">
+                                        Rp {{ number_format($product->harga, 0, ',', '.') }}
+                                    </p>
+                                    <div class="d-flex align-items-center justify-content-center mb-3">
+                                        <button type="button" class="btn btn-outline-secondary minus-btn">-</button>
+                                        <input type="number" 
+                                               name="quantities[{{ $product->id }}]" 
+                                               value="0" 
+                                               min="0" 
+                                               max="{{ $product->stok }}"
+                                               class="form-control text-center mx-2 quantity-input" 
+                                               style="width: 60px;" 
+                                               readonly>
+                                        <button type="button" class="btn btn-outline-secondary plus-btn">+</button>
+                                    </div>
+                                    <p class="text-muted">
+                                        Sub Total: <strong class="subtotal text-dark">Rp 0</strong>
+                                    </p>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="text-muted mb-3">
-                            Sub Total <span id="subtotal-{{ $product->id }}" class="font-weight-bold">Rp. 0</span>
-                        </div>
-                    </div>
+                    @endforeach
                 </div>
-            </div>
-        @endforeach
-    </div>
-
-    <div class="fixed-bottom bg-white py-3 px-4 shadow-sm" style="border-top: 1px solid #e3e6f0; margin-left: 250px; width: calc(100% - 250px);">
-        <div class="container-fluid">
-            <form id="salesForm" method="POST" action="{{ route('pembelian.confirm') }}">
-                @csrf
-                <div id="selected-products"></div>
-                <button type="submit" class="btn btn-primary px-5 float-right">Selanjutnya <i class="fas fa-arrow-right ml-2"></i></button>
             </form>
         </div>
     </div>
-</div>
 
+    <!-- Fixed Button yang lebih sederhana -->
+    <div class="fixed-bottom p-3 d-flex justify-content-end" style="margin-left: 250px; border-top: none;">
+        <button type="submit" form="purchaseForm" class="btn btn-primary" style="width: 200px;">
+            Selanjutnya
+        </button>
+    </div>
 
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const formatCurrency = (number) => {
-        return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    };
-
-    const updateSubtotal = (id, quantity, price) => {
-        const qtyInput = document.getElementById(`qty-${id}`);
-        const plusBtn = document.querySelector(`.btn-plus[data-id="${id}"]`);
-        const minusBtn = document.querySelector(`.btn-minus[data-id="${id}"]`);
-        const stock = parseInt(plusBtn.dataset.stock);
-
-        qtyInput.value = quantity;
-
-        const subtotal = price * quantity;
-        const subtotalEl = document.getElementById(`subtotal-${id}`);
-        subtotalEl.textContent = `Rp. ${formatCurrency(subtotal)}`;
-
-        if (quantity > 0) {
-            let formInput = document.querySelector(`input[name="items[${id}][quantity]"]`);
-            if (!formInput) {
-                formInput = document.createElement('input');
-                formInput.type = 'hidden';
-                formInput.name = `items[${id}][quantity]`;
-                document.getElementById('selected-products').appendChild(formInput);
-            }
-            formInput.value = quantity;
-        } else {
-            const formInput = document.querySelector(`input[name="items[${id}][quantity]"]`);
-            if (formInput) formInput.remove();
-        }
-
-        plusBtn.disabled = quantity >= stock;
-        minusBtn.disabled = quantity <= 0;
-    };
-
-    document.querySelectorAll('.btn-plus').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (btn.disabled) return;
-            
-            const id = btn.dataset.id;
-            const stock = parseInt(btn.dataset.stock);
-            const price = parseInt(btn.dataset.price);
-            const currentQty = parseInt(document.getElementById(`qty-${id}`).value) || 0;
-
-            if (currentQty < stock) {
-                updateSubtotal(id, currentQty + 1, price);
-            }
-        });
-    });
-
-    document.querySelectorAll('.btn-minus').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (btn.disabled) return;
-            
-            const id = btn.dataset.id;
-            const price = parseInt(btn.dataset.price);
-            const currentQty = parseInt(document.getElementById(`qty-${id}`).value) || 0;
-
-            if (currentQty > 0) {
-                updateSubtotal(id, currentQty - 1, price);
-            }
-        });
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('salesForm').addEventListener('submit', function(e) {
-        const selectedProducts = document.querySelectorAll('input[name^="items"]');
-        if (selectedProducts.length === 0) {
-            e.preventDefault();
-            alert('Silahkan pilih minimal satu produk');
-            return false;
-        }
-        
-        this.method = 'POST';
-        this.action = "{{ route('pembelian.confirm') }}";
-        return true;
-    });
-});
-});
-</script>
-@endpush
+    @push('scripts')
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const products = document.querySelectorAll('.card.h-100');
+                
+                products.forEach(product => {
+                    const minusBtn = product.querySelector('.minus-btn');
+                    const plusBtn = product.querySelector('.plus-btn');
+                    const quantityInput = product.querySelector('.quantity-input');
+                    const subtotalElement = product.querySelector('.subtotal');
+                    const price = parseInt(product.querySelector('[data-price]').dataset.price);
+                    
+                    function updateSubtotal() {
+                        const quantity = parseInt(quantityInput.value);
+                        const subtotal = price * quantity;
+                        subtotalElement.textContent = `Rp ${subtotal.toLocaleString('id-ID')}`;
+                    }
+                    
+                    minusBtn.addEventListener('click', () => {
+                        if (parseInt(quantityInput.value) > 0) {
+                            quantityInput.value = parseInt(quantityInput.value) - 1;
+                            updateSubtotal();
+                        }
+                    });
+                    
+                    plusBtn.addEventListener('click', () => {
+                        if (parseInt(quantityInput.value) < parseInt(quantityInput.max)) {
+                            quantityInput.value = parseInt(quantityInput.value) + 1;
+                            updateSubtotal();
+                        }
+                    });
+                });
+            });
+        </script>
+    @endpush
 @endsection

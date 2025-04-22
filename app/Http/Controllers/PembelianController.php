@@ -1,22 +1,39 @@
 <?php
-
 namespace App\Http\Controllers;
 
-use App\Models\DetailPembelian;
 use App\Models\Pembelians;
+use App\Models\Pembayaran;
 use App\Models\Product;
 use App\Models\Member;
-use Illuminate\Support\Facades\DB;
+use App\Models\DetailPembelian;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Exports\PembeliansExport;
+use Illuminate\Support\Facades\Auth;
 
 class PembelianController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $pembelians = Pembelians::orderBy('created_at', 'desc',)->paginate(10);
-        $startingNumber = ($pembelians->currentPage() - 1) * $pembelians->perPage() + 1;
-        return view('pembelian.index', compact('pembelians', 'startingNumber'));
+        $query = Pembelians::query()->orderBy('created_at', 'desc'); // Add this line to sort by newest
+        
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('customer_name', 'like', "%{$search}%")
+                  ->orWhere('tanggal', 'like', "%{$search}%")
+                  ->orWhere('dibuat_oleh', 'like', "%{$search}%");
+            });
+        }
+        
+        // Ensure perPage is an integer
+        $perPage = is_numeric($request->get('per_page')) ? (int)$request->get('per_page') : 10;
+        
+        $pembelians = $query->paginate($perPage)->withQueryString();
+        
+        return view('pembelian.index', compact('pembelians'));
     }
 
     public function create()
@@ -25,166 +42,332 @@ class PembelianController extends Controller
         return view('pembelian.create', compact('products'));
     }
 
-public function confirm(Request $request)
-{
-    if (!$request->has('items') || empty($request->items)) {
-        return redirect()->route('pembelian.create')
-               ->with('error', 'Pilih minimal satu produk');
-    }
-
-    $selectedProducts = [];
-    $total = 0;
-
-    foreach($request->items as $productId => $item) {
-        $product = Product::find($productId);
-        if ($product && $item['quantity'] > 0) {
-            $subtotal = $product->harga * $item['quantity'];
-            $selectedProducts[] = [
-                'id' => $productId,
-                'name' => $product->nama_produk,
-                'price' => $product->harga,
-                'quantity' => $item['quantity'],
-                'subtotal' => $subtotal,
-                'img' => $product->img
-            ];
-            $total += $subtotal;
+    public function store(Request $request)
+    {
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'required|integer|min:1',
+            'customer_name' => 'required|string|max:255',
+        ]);
+    
+        DB::beginTransaction();
+        try {
+            $product = Product::findOrFail($request->product_id);
+            
+            if ($product->stok < $request->quantity) {
+                return back()->with('error', 'Stok tidak mencukupi!');
+            }
+        
+            $total_price = $product->harga * $request->quantity;
+        
+            $pembelian = Pembelians::create([
+                'customer_name' => $request->customer_name,
+                'invoice_number' => 'INV-' . date('Ymd') . '-' . rand(1000, 9999),
+                'grand_total' => $total_price,
+                'tanggal' => now(),
+                'dibuat_oleh' => Auth::user()->name
+            ]);
+        
+            // Create detail record
+            DetailPembelian::create([
+                'pembelian_id' => $pembelian->id,
+                'id_produk' => $request->product_id,
+                'quantity' => $request->quantity,
+                'total_price' => $total_price
+            ]);
+        
+            $product->decrement('stok', $request->quantity);
+        
+            DB::commit();
+            return redirect()->route('pembelian.index')
+                ->with('success', 'Pembelian berhasil ditambahkan!');
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
         }
     }
 
-    if (empty($selectedProducts)) {
-        return redirect()->route('pembelian.create')
-               ->with('error', 'Tidak ada produk valid yang dipilih');
+    public function detail(Pembelians $pembelian)
+    {
+        $pembelian->load(['details.product']);
+        
+        if ($pembelian->customer_name !== 'Non Member') {
+            $member = Member::where('name', $pembelian->customer_name)->first();
+            if ($member) {
+                $member->member_since = \Carbon\Carbon::parse($member->member_since);
+            }
+            $pembelian->member = $member;
+        }
+        
+        return view('pembelian.detail', compact('pembelian'));
     }
 
-    // Ambil data member untuk dropdown
-    $members = Member::orderBy('name')->get();
+    public function confirm(Request $request)
+    {
+        $selectedProducts = [];
+        $total = 0;
+    
+        foreach($request->quantities as $productId => $quantity) {
+            if($quantity > 0) {
+                $product = Product::find($productId);
+                $subtotal = $product->harga * $quantity;
+                $selectedProducts[] = [
+                    'id' => $productId,
+                    'name' => $product->nama_produk,
+                    'price' => $product->harga,
+                    'quantity' => $quantity,
+                    'subtotal' => $subtotal
+                ];
+                $total += $subtotal;
+            }
+        }
+    
+        if (empty($selectedProducts)) {
+            return redirect()->back()->with('error', 'Pilih minimal satu produk');
+        }
+    
+        // Hitung dan simpan poin baru (1% dari total)
+        $points_earned = 0;
+        if ($request->phone_number) {
+            $points_earned = floor($total * 0.01);
+            $member = Member::where('phone_number', $request->phone_number)->first();
+            
+            if ($member) {
+                DB::transaction(function() use ($member, $points_earned) {
+                    $member->points += $points_earned;
+                    $member->save();
+                });
+            }
+        }
+    
+        return view('pembelian.confirm', compact('selectedProducts', 'total', 'points_earned'));
+    }
 
-    return view('pembelian.confirm', compact('selectedProducts', 'total', 'members'));
-}
-
-public function store(Request $request)
-{
-    $validated = $request->validate([
-        'items' => 'required|array',
-        'total_amount' => 'required|numeric',
-        'payment_amount' => 'required|numeric',
-        'member_type' => 'required|in:member,non_member',
-        'phone_number' => 'nullable|required_if:member_type,member',
-        'use_points' => 'nullable|boolean',
-        'points_used' => 'nullable|numeric|min:0'
-    ]);
-
-    DB::beginTransaction();
-    try {
-        // Handle member
-        $customerName = 'Non Member';
-        $pointsUsed = 0;
-        $discountFromPoints = 0;
-        $pointsEarned = 0;
+    public function memberInfo(Request $request)
+    {
+        $request->validate([
+            'phone_number' => 'required',
+            'total_bayar' => 'required|numeric',
+            'products' => 'required'
+        ]);
         
+        $selectedProducts = json_decode($request->products, true);
+        $total = $request->total_amount;
+        $total_bayar = $request->total_bayar;
+        
+        // Cek member berdasarkan nomor telepon
+        $member = Member::where('phone_number', $request->phone_number)->first();
+        $memberName = $member ? $member->name : '';
+        $existingPoints = $member ? $member->points : 0;  // Poin yang ada di database
+        
+        // Poin yang akan didapat (1% dari total)
+        $points = floor($total * 0.01);
+        
+        // Periksa apakah member baru
+        $isNewMember = !$member;
+        
+        return view('pembelian.member-info', [
+            'products' => $request->products,
+            'total_amount' => $total,
+            'total_bayar' => $total_bayar,
+            'phone_number' => $request->phone_number,
+            'points' => $points,
+            'memberName' => $memberName,
+            'existingPoints' => $existingPoints,  // Pastikan data poin diteruskan
+            'isNewMember' => $isNewMember
+        ]);
+    }
+    
+
+    public function pembayaran(Request $request)
+    {
+        $selectedProducts = json_decode($request->products, true);
+        $total = $request->total_amount;
+        $total_bayar = $request->total_bayar;
+        
+        // Handle member data
+        $member = null;
+        $points_earned = 0;
+        $points_used = 0;
+        $discount_from_points = 0;
+
         if ($request->member_type === 'member') {
             $member = Member::where('phone_number', $request->phone_number)->first();
+            
             if (!$member) {
-                return back()->with('error', 'Member tidak ditemukan');
-            }
-            $customerName = $member->name;
-            
-            // Handle penggunaan poin
-            if ($request->use_points && $request->points_used > 0) {
-                $pointsUsed = min($request->points_used, $member->points);
-                // Maksimal diskon 50% dari total belanja
-                $maxDiscount = $request->total_amount * 0.5;
-                $discountFromPoints = min($pointsUsed * 1000, $maxDiscount);
-                $pointsUsed = floor($discountFromPoints / 1000); // Sesuaikan kembali poin yang digunakan
+                // Create new member
+                $member = new Member();
+                $member->name = $request->member_name;
+                $member->phone_number = $request->phone_number;
+                $member->points = floor($total * 0.01); // 1% dari total
+                $member->member_since = now();
+                $member->save();
                 
-                $member->points -= $pointsUsed;
-                $member->save();
-            }
-            
-            // Hitung poin yang didapat (jika tidak menggunakan poin)
-            if (!$request->use_points) {
-                $pointsEarned = floor($request->total_amount / 10000); // Rp 10.000 = 1 poin
-                $member->points += $pointsEarned;
-                $member->save();
+                $points_earned = floor($total * 0.01);
+            } else {
+                // Handle existing member points
+                if ($request->use_points && $member->points > 0) {
+                    $points_used = $member->points;
+                    $discount_from_points = $points_used;
+                    
+                    // Hitung poin baru dari transaksi ini (1%)
+                    $points_earned = floor($total * 0.01);
+                    
+                    // Simpan perubahan poin ke database
+                    DB::transaction(function() use ($member, $points_earned) {
+                        // Reset poin yang digunakan
+                        $member->points = 0;
+                        $member->save();
+                        
+                        // Tambahkan poin baru
+                        $member->points = $points_earned;
+                        $member->save();
+                    });
+                    
+                } else {
+                    // Jika tidak menggunakan poin, tambahkan poin baru
+                    $points_earned = floor($total * 0.01);
+                    $member->points += $points_earned;
+                    $member->save();
+                }
             }
         }
 
-        // Create purchase record
+        // Calculate final total after point discount
+        $final_total = $total - $discount_from_points;
+        $kembalian = $total_bayar - $final_total;
+        $invoice_number = 'INV-' . date('Ymd') . '-' . rand(1000, 9999);
+
+        // Create transaction record
         $pembelian = Pembelians::create([
-            'customer_name' => $customerName,
-            'invoice_number' => 'INV-' . date('YmdHis') . rand(100, 999),
-            'grand_total' => $request->total_amount,
+            'invoice_number' => $invoice_number,
+            'customer_name' => $member ? $member->name : 'Non Member',
+            'grand_total' => $final_total,
             'tanggal' => now(),
-            'dibuat_oleh' => auth()->user()->name, 
-            'kembalian' => $request->payment_amount - ($request->total_amount - $discountFromPoints),
-            'points_used' => $pointsUsed,
-            'discount_from_points' => $discountFromPoints,
-            'points_earned' => $pointsEarned,
-            'member_phone' => $request->member_type === 'member' ? $request->phone_number : null
+            'dibuat_oleh' => Auth::user()->name,
+            'is_member' => $member ? true : false,
+            'member_id' => $member ? $member->id : null,
+            'poin_digunakan' => $points_used
         ]);
 
-        // Save purchase details
-        foreach ($request->items as $productId => $item) {
-            $product = Product::find($productId);
-            if ($product) {
-                // Kurangi stok produk
-                $product->stok -= $item['quantity'];
-                $product->save();
-        
-                // Simpan detail pembelian
-                DetailPembelian::create([
-                    'pembelian_id' => $pembelian->id,
-                    'id_produk' => $productId,
-                    'quantity' => $item['quantity'],
-                    'total_price' => $product->harga * $item['quantity']
-                ]);
-            }
+        // Create detail records
+        foreach($selectedProducts as $product) {
+            DetailPembelian::create([
+                'pembelian_id' => $pembelian->id,
+                'id_produk' => $product['id'],
+                'quantity' => $product['quantity'],
+                'total_price' => $product['subtotal']
+            ]);
+
+            Product::where('id', $product['id'])
+                ->decrement('stok', $product['quantity']);
         }
-        
 
-        DB::commit();
-        return redirect()->route('pembelian.pembayaran', ['id' => $pembelian->id]);
-        
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Pembelian error: ' . $e->getMessage());
-        return back()->with('error', 'Terjadi kesalahan saat menyimpan transaksi');
-    }
-}
-
-    public function pembayaran(Pembelians $pembelian)
-    {
-        $detailPembelian = DetailPembelian::where('pembelian_id', $pembelian->id)
-            ->with('product')
-            ->get();
-    
-        $selectedProducts = $detailPembelian->map(function ($detail) {
-            return [
-                'id' => $detail->id_produk,
-                'name' => $detail->product->nama_produk,
-                'price' => $detail->product->harga,
-                'quantity' => $detail->quantity,
-                'subtotal' => $detail->total_price,
-                'img' => $detail->product->img
-            ];
-        })->toArray();
-    
-        return view('pembelian.pembayaran', [
-            'pembelian' => $pembelian,
-            'selectedProducts' => $selectedProducts,
-            'total' => $pembelian->grand_total,
-            'total_bayar' => $pembelian->grand_total + $pembelian->kembalian,
-            'kembalian' => $pembelian->kembalian,
-            'invoice_number' => $pembelian->invoice_number
+        // Create payment record
+        Pembayaran::create([
+            'pembelian_id' => $pembelian->id,
+            'jumlah_bayar' => $total_bayar,
+            'kembalian' => $kembalian
         ]);
+
+        return view('pembelian.pembayaran', compact(
+            'selectedProducts',
+            'total',
+            'final_total',
+            'total_bayar',
+            'kembalian',
+            'invoice_number',
+            'member',
+            'points_earned',
+            'points_used',
+            'discount_from_points',
+            'pembelian'
+        ));
     }
 
-    public function show(Pembelians $pembelian)
+    public function pembayaranNonMember(Request $request)
     {
-        $detailPembelian = DetailPembelian::where('pembelian_id', $pembelian->id)
-            ->with('product')
-            ->get();
-    
-        return view('pembelian.show', compact('pembelian', 'detailPembelian'));
+        $selectedProducts = json_decode($request->products, true);
+        $total = $request->total_amount;
+        $total_bayar = $request->total_bayar;
+        $kembalian = $total_bayar - $total;
+        $invoice_number = 'INV-' . date('Ymd') . '-' . rand(1000, 9999);
+
+        // Create main transaction record
+        $pembelian = Pembelians::create([
+            'invoice_number' => $invoice_number,
+            'customer_name' => 'Non Member',
+            'grand_total' => $total,
+            'tanggal' => now(),
+            'dibuat_oleh' => Auth::user()->name,
+            'is_member' => false
+        ]);
+
+        // Create detail records
+        foreach($selectedProducts as $product) {
+            DetailPembelian::create([
+                'pembelian_id' => $pembelian->id,
+                'id_produk' => $product['id'],
+                'quantity' => $product['quantity'],
+                'total_price' => $product['subtotal']
+            ]);
+
+            Product::where('id', $product['id'])
+                ->decrement('stok', $product['quantity']);
+        }
+
+        // Create payment record
+        Pembayaran::create([
+            'pembelian_id' => $pembelian->id,
+            'jumlah_bayar' => $total_bayar,
+            'kembalian' => $kembalian
+        ]);
+
+        return view('pembelian.pembayaran', compact(
+            'selectedProducts',
+            'total',
+            'total_bayar',
+            'kembalian',
+            'invoice_number',
+            'pembelian'
+        ));
+    }
+
+    public function checkMember($phone)
+    {
+        $member = Member::where('phone_number', $phone)->first();
+        
+        if ($member) {
+            return response()->json([
+                'exists' => true,
+                'member' => [
+                    'name' => $member->name,
+                    'points' => $member->points,
+                    'phone_number' => $member->phone_number
+                ]
+            ]);
+        }
+
+        return response()->json(['exists' => false]);
+    }
+
+    public function exportToExcel()
+    {
+        return Excel::download(new PembeliansExport, 'pembelian.xlsx');
+    }
+
+    public function exportToPDF($id)
+    {
+        $pembelian = Pembelians::with(['details.product'])->findOrFail($id);
+        $member = Member::where('name', $pembelian->customer_name)->first();
+
+        $data = [
+            'pembelian' => $pembelian,
+            'member' => $member,
+        ];
+
+        $pdf = Pdf::loadView('pembelian.pdf_invoice', $data);
+        return $pdf->download('invoice_' . $pembelian->invoice_number . '.pdf');
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DetailPembelian;
+use App\Models\Pembelians;
 use Illuminate\Http\Request;
 
 class DetailPembelianController extends Controller
@@ -16,50 +17,32 @@ class DetailPembelianController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
      * Display the specified resource.
      */
     public function show(DetailPembelian $detailPembelian)
     {
         //
     }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(DetailPembelian $detailPembelian)
+    
+    public function ajaxDetail($id)
     {
-        //
+        $pembelian = Pembelians::with(['details.product'])->findOrFail($id);
+
+        return response()->json([
+            'details' => $pembelian->details->map(function ($detail) {
+                return [
+                    'produk' => $detail->product->nama_produk,
+                    'jumlah' => $detail->quantity,
+                    'total' => number_format($detail->total_price, 0, ',', '.')
+                ];
+            })
+        ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, DetailPembelian $detailPembelian)
+    public function ajaxDetailHTML($id)
     {
-        //
+        $pembelian = Pembelians::with(['details.product', 'member'])->findOrFail($id);
+        return view('pembelian.detail', compact('pembelian'));
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(DetailPembelian $detailPembelian)
-    {
-        //
-    }
 }
